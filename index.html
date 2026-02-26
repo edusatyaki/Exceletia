@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dark Night: Realistic Grassland Walk</title>
+  <title>Ultra-Dense Waist-High Grass & Interactive Map</title>
+  
+  <link href="https://fonts.googleapis.com/css?family=Oswald:200,300" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.14/vue.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenMax.min.js"></script>
+  <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/16327/MorphSVGPlugin.min.js"></script>
+
   <style>
     body { 
       margin: 0; 
@@ -13,90 +20,168 @@
       user-select: none;
     }
     
-    /* --- OVERLAYS --- */
+    /* --- HORIZONTAL GLASSMORPHISM UI --- */
     #ui { 
-      position: absolute; 
-      bottom: 40px; 
-      width: 100%; 
-      text-align: center; 
-      pointer-events: none; 
-      z-index: 10;
-      opacity: 0;
-      transition: opacity 1s ease;
+      position: absolute; bottom: 30px; width: 100%; display: flex;
+      justify-content: center; pointer-events: none; z-index: 10;
+      opacity: 0; transition: opacity 1s ease;
     }
-    .controls-box {
-      background: rgba(8, 10, 14, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      display: inline-block; 
-      padding: 15px 35px;
-      border-radius: 50px; 
-      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: #e0e0e0;
+    .glass-bar {
+      display: flex; flex-direction: row; align-items: center; gap: 20px;
+      background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50px; padding: 12px 30px; box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.5); color: #fff;
     }
-    h1 { 
-      margin: 0 0 8px 0; color: #fff; font-size: 18px; 
-      font-weight: 300; letter-spacing: 5px; text-transform: uppercase;
+    .glass-bar h1 { 
+      margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 3px; 
+      text-transform: uppercase; padding-right: 20px; border-right: 1px solid rgba(255, 255, 255, 0.2); 
     }
-    p { margin: 0; font-size: 13px; color: #b3c2d1; letter-spacing: 1px; }
-    b { color: #4cd137; } 
-    
-    #loading {
-      position: absolute;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: #05080c; z-index: 20; 
-      transition: opacity 0.8s ease, visibility 0.8s ease;
+    .control-group { display: flex; gap: 20px; font-size: 13px; color: #cbd5e1; letter-spacing: 1px; }
+    .glass-bar b { color: #4cd137; background: rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 6px; margin-right: 6px; font-weight: bold; } 
+    .btn-container { display: flex; gap: 10px; pointer-events: auto; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, 0.2); }
+    .action-btn {
+      padding: 8px 20px; font-size: 12px; font-weight: bold; letter-spacing: 1.5px;
+      color: #fff; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 20px;
+      cursor: pointer; transition: 0.3s; text-transform: uppercase;
     }
-    #loading-text {
-      font-size: 16px; color: #fff; text-transform: uppercase;
-      letter-spacing: 4px; margin-bottom: 20px;
+    .action-btn:hover { background: #4cd137; color: #000; border-color: #4cd137; box-shadow: 0 0 15px rgba(76, 209, 55, 0.5); }
+    #btn-map { display: none; background: rgba(52, 152, 219, 0.3); border-color: #3498db; }
+    #btn-map:hover { background: #3498db; color: #fff; box-shadow: 0 0 15px rgba(52, 152, 219, 0.6); }
+
+    /* --- TOAST NOTIFICATION --- */
+    #toast {
+      position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(46, 204, 113, 0.2); border: 1px solid #2ecc71;
+      backdrop-filter: blur(10px); color: #fff; padding: 15px 30px;
+      border-radius: 30px; font-size: 14px; font-weight: bold; letter-spacing: 2px;
+      text-transform: uppercase; box-shadow: 0 0 20px rgba(46, 204, 113, 0.4);
+      opacity: 0; visibility: hidden; transition: opacity 0.5s ease; z-index: 15;
     }
-    .progress-container {
-      width: 300px; height: 3px; background: rgba(255, 255, 255, 0.1);
-      border-radius: 2px; overflow: hidden; position: relative;
-    }
-    #progress-bar {
-      width: 0%; height: 100%; background: #4cd137;
-      transition: width 0.2s ease;
-      box-shadow: 0 0 10px rgba(76, 209, 55, 0.8);
-    }
-    
-    #start-screen {
+
+    /* --- MAP MODAL & VUE APP STYLES --- */
+    :root { --text: #FFF; --light: #34495D; --medium: #EE7738; --dark: #fcae44; }
+    #map-modal {
       position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; opacity: 0; visibility: hidden; transition: opacity 0.4s ease;
+    }
+    .map-content {
+      background: var(--light); border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 30px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+      display: flex; flex-direction: column; align-items: center; width: 80vw; max-width: 1000px;
+      font-family: 'Oswald', sans-serif; color: var(--text);
+    }
+    #map-app { width: 100%; display: flex; flex-direction: column; align-items: center; }
+    
+    .mileage__calculations { margin: 0; font-size: 3rem; font-weight: 300; }
+    .mileage__calculations small { font-size: 0.6em; color: var(--dark); margin-left: 5px; }
+    .mileage-map { display: block; width: 100%; height: auto; max-height: 60vh; margin: 0 auto 1rem; overflow: visible; }
+    .mileage-map__states { stroke: var(--light); stroke-width: 2; fill: var(--medium); }
+    .marker { fill: var(--dark); stroke: var(--text); stroke-width: 5; cursor: pointer; transition: opacity 0.3s linear; user-select: none; }
+    .marker > * { transition: transform 0.3s cubic-bezier(.6, .0, .5, 1); }
+    .marker text { stroke: none; fill: var(--text); font-family: inherit; font-size: 28px; font-weight: 200; }
+    .marker--current { opacity: 0.8; pointer-events: none; }
+    .marker--current > * { transform: scale(0.8); }
+    .airport { fill: #FFF; stroke-width: 2; stroke: transparent; transition: stroke 0.3s linear; }
+    .airport:hover { stroke: rgba(255, 255, 255, 0.3); }
+    .airport--current { stroke: rgba(255, 255, 255, 0.8); }
+    .airport__range { fill: transparent; cursor: pointer; }
+    .marker-connector { fill: none; stroke: #FFF; stroke-width: 3; stroke-dasharray: 6 6; pointer-events: none; animation: marching-ants 1s linear 0s infinite; }
+    @keyframes marching-ants { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 12; } }
+    .airplane { pointer-events: none; fill: #FFF; opacity: 0; }
+    .mileage__instructions { opacity: 0.7; font-size: 0.9rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px;}
+    .marker-fade-enter-active, .marker-fade-leave-active { transition: opacity .3s linear; }
+    .marker-fade-enter, .marker-fade-leave-to { opacity: 0; }
+
+    #close-map {
+      margin-top: 10px; padding: 10px 40px; font-size: 14px; font-weight: bold; letter-spacing: 2px;
+      color: #fff; background: #e74c3c; border: none; border-radius: 30px; cursor: pointer; transition: 0.2s;
+    }
+    #close-map:hover { background: #c0392b; transform: scale(1.05); }
+
+    /* --- LOADING SCREENS --- */
+    #loading, #start-screen {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      z-index: 15; visibility: hidden; opacity: 0; transition: opacity 0.5s ease;
+      z-index: 100; transition: opacity 0.8s ease, visibility 0.8s ease;
     }
+    #loading { background: #05080c; }
+    #start-screen { background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); visibility: hidden; opacity: 0; }
+    #loading-text { font-size: 14px; color: #fff; text-transform: uppercase; letter-spacing: 5px; margin-bottom: 25px; opacity: 0.8; }
+    .progress-container { width: 350px; height: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+    #progress-bar { width: 0%; height: 100%; background: #4cd137; transition: width 0.2s ease; }
+    #start-screen h2 { margin-bottom: 30px; color: #fff; font-weight: 300; letter-spacing: 8px; text-transform: uppercase; }
     #start-screen button {
-      padding: 15px 40px; font-size: 18px; font-family: inherit; letter-spacing: 2px;
-      color: #111; background: #fff; border: none; border-radius: 30px;
-      cursor: pointer; box-shadow: 0 5px 25px rgba(255, 255, 255, 0.3);
-      font-weight: bold;
-      transition: transform 0.2s, background 0.2s;
+      padding: 15px 50px; font-size: 14px; letter-spacing: 3px; color: #fff; background: rgba(255, 255, 255, 0.1); 
+      border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 30px; cursor: pointer; font-weight: bold; transition: 0.3s;
     }
-    #start-screen button:hover { background: #ddd; transform: scale(1.05); }
+    #start-screen button:hover { background: #fff; color: #000; transform: scale(1.05); }
   </style>
 </head>
 <body>
 
   <div id="loading">
-    <div id="loading-text">Generating Dark Night...</div>
-    <div class="progress-container">
-      <div id="progress-bar"></div>
-    </div>
+    <div id="loading-text">Seeding 1.5 Million Grass Blades...</div>
+    <div class="progress-container"><div id="progress-bar"></div></div>
   </div>
-  
   <div id="start-screen">
-    <h1 style="margin-bottom: 20px; color: #fff; letter-spacing: 4px;">Midnight Expedition</h1>
-    <button id="start-btn">TURN ON LIGHTS</button>
+    <h2>Dense Grassland Expedition</h2>
+    <button id="start-btn">Begin Journey</button>
+  </div>
+
+  <div id="toast">🗺️ You have mapped the area! [Press M]</div>
+
+  <div id="map-modal">
+    <div class="map-content">
+      <div id="map-app" class="mileage">
+        <svg class="mileage-map" ref="map" width="1200" height="780" viewBox="-120 -180 1200 780">
+            <g class="mileage-map__states" ref="states"></g>
+            <g ref="airports">
+                <g class="airport" :class="{ 'airport--current' : airport.current }" v-for="airport in airports">
+                    <circle r="3" :cx="airport.x" :cy="airport.y" class="airport__marker" />
+                    <circle r="16" :cx="airport.x" :cy="airport.y" class="airport__range"
+                            @mousemove="airportSnap($event, airport)"
+                            @mouseup="airportClick($event, airport)"
+                            @mouseleave.self="airportLeave($event, airport)" />
+                </g>
+            </g>
+            <path class="marker-connector" :d="markerConnect()"></path>
+            <g class="airplane" ref="airplane">
+                <path class="airplane__icon" d="M21 15.984l-8.016-2.484v5.484l2.016 1.5v1.5l-3.516-0.984-3.469 0.984v-1.5l1.969-1.5v-5.484l-7.969 2.484v-1.969l7.969-5.016v-5.484c0-0.844 0.656-1.5 1.5-1.5s1.5 0.656 1.5 1.5v5.484l8.016 5.016v1.969z" transform="translate(-8,-15) scale(1.2)"></path>
+            </g>
+            <g v-for="marker in markers" 
+               @mousedown="markerSet($event, marker)" 
+               class="marker" 
+               :class="{ 'marker--current' : marker.current }" 
+               :transform="'translate('+marker.x+','+marker.y+')'">
+                <path :fill="marker.fill" d="M0 0l28.592-28.592c15.78-15.78 15.908-41.24.128-57.02a40.424 40.424 0 0 0-57.124 57.2z"></path>
+                <transition name="marker-fade">
+                    <text v-if="marker.airport" x="0" y="-42" text-anchor="middle">{{ marker.airport.LocationID }}</text>
+                </transition>
+            </g>
+        </svg>
+        <h1 class="mileage__calculations" v-show="distance">
+            <span>{{ distance | numberWithCommas }}</span><small>mi</small>
+        </h1>
+        <div class="mileage__instructions">Drag the markers around to calculate distance</div>
+      </div>
+      <button id="close-map">CLOSE MAP</button>
+    </div>
   </div>
 
   <div id="ui">
-    <div class="controls-box">
-      <h1>Dark Plains</h1>
-      <p><b>W A S D</b> to Walk &nbsp;|&nbsp; <b>F</b> to Toggle Torch &nbsp;|&nbsp; <b>Mouse</b> to Look</p>
+    <div class="glass-bar">
+      <h1>Wilderness</h1>
+      <div class="control-group">
+        <span><b>WASD</b> Move</span>
+        <span><b>Mouse</b> Look</span>
+        <span><b>F</b> Torch</span>
+      </div>
+      <div class="btn-container">
+        <button class="action-btn" id="btn-time">Day Mode</button>
+        <button class="action-btn" id="btn-map">View Map (M)</button>
+      </div>
     </div>
   </div>
 
@@ -106,148 +191,111 @@
     import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
 
     // --- CONFIGURATION ---
-    const GRASS_INSTANCES = 150000; 
-    const GRASS_RANGE = 50; 
+    const GRASS_INSTANCES = 1500000; // INSANE DENSITY
+    const WORLD_SIZE = 160; // Tighter world bounds to pack the 1.5M blades closely
+    const GRASS_HEIGHT = 0.75; // STRICTLY WAIST-HIGH. Will never be above the 1.8 unit tall character's head.
 
-    // --- AUDIO SETUP ---
+    // --- GAME STATE ---
+    let distanceWalked = 0;
+    let mapUnlocked = false;
+    let mapOpen = false;
+
     const ambientAudio = new Audio('https://actions.google.com/sounds/v1/weather/winter_wind_loop.ogg');
-    ambientAudio.loop = true;
-    ambientAudio.volume = 0.5;
+    ambientAudio.loop = true; ambientAudio.volume = 0.4;
 
     const loadingScreen = document.getElementById('loading');
     const startScreen = document.getElementById('start-screen');
     const uiScreen = document.getElementById('ui');
     const startBtn = document.getElementById('start-btn');
-    const progressBar = document.getElementById('progress-bar');
-    const loadingText = document.getElementById('loading-text');
+    const btnTime = document.getElementById('btn-time');
+    const btnMap = document.getElementById('btn-map');
+    const toast = document.getElementById('toast');
+    const mapModal = document.getElementById('map-modal');
+    const closeMapBtn = document.getElementById('close-map');
 
     const manager = new THREE.LoadingManager();
-    manager.onProgress = function (url, itemsLoaded, itemsTotal) {
-      progressBar.style.width = (itemsLoaded / itemsTotal * 100) + '%';
-    };
-    manager.onLoad = function () {
-      loadingText.innerText = "Initializing Engine...";
+    manager.onProgress = (u, loaded, total) => { document.getElementById('progress-bar').style.width = (loaded / total * 100) + '%'; };
+    manager.onLoad = () => {
+      document.getElementById('loading-text').innerText = "Initializing Engine...";
       setTimeout(() => {
         buildWorld();
         loadingScreen.style.opacity = '0';
-        setTimeout(() => {
-          loadingScreen.style.visibility = 'hidden';
-          startScreen.style.visibility = 'visible';
-          startScreen.style.opacity = '1';
-        }, 800);
+        setTimeout(() => { loadingScreen.style.visibility = 'hidden'; startScreen.style.visibility = 'visible'; startScreen.style.opacity = '1'; }, 800);
       }, 100);
     };
 
     startBtn.addEventListener('click', () => {
-      ambientAudio.play().catch(e => console.log("Audio play prevented:", e));
-      startScreen.style.opacity = '0';
-      uiScreen.style.opacity = '1';
-      // Automatically turn the torch on when entering the game
-      torchOn = true;
-      if (torchLight && torchGlow) {
-          torchLight.intensity = 150.0;
-          torchGlow.intensity = 25.0;
-      }
-      setTimeout(() => {
-        startScreen.style.visibility = 'hidden';
-        animate(); 
-      }, 500);
+      ambientAudio.play().catch(e => console.log("Audio play prevented"));
+      startScreen.style.opacity = '0'; uiScreen.style.opacity = '1';
+      torchOn = true; if (torchLight && torchGlow) { torchLight.intensity = 150.0; torchGlow.intensity = 20.0; }
+      setTimeout(() => { startScreen.style.visibility = 'hidden'; animate(); }, 500);
     });
 
-    // 1. CORE SETUP WITH DARK NIGHT GRAPHICS
+    // 1. CORE SETUP
     const scene = new THREE.Scene();
-    
-    // Deep, dark night fog
-    const fogColor = new THREE.Color(0x060912); 
-    scene.fog = new THREE.FogExp2(fogColor, 0.04); 
-    scene.background = fogColor;
-
     const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 3, 8); 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; 
-    renderer.toneMappingExposure = 0.8; // Darker exposure
-    renderer.physicallyCorrectLights = true; 
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+    renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+    renderer.toneMappingExposure = 1.0; renderer.physicallyCorrectLights = true; 
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.enableDamping = true; controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.05; 
     controls.minDistance = 2; controls.maxDistance = 15;
     controls.enablePan = false;
 
-    // 2. REALISTIC DIM MOONLIGHT
-    // Much darker ambient lighting to make the torch necessary
-    const hemiLight = new THREE.HemisphereLight(0x162032, 0x050810, 0.4); 
-    scene.add(hemiLight);
-    
-    // Dim moonlight
-    const moonLight = new THREE.DirectionalLight(0x7799bb, 0.8); 
-    moonLight.position.set(30, 50, -30); 
-    moonLight.castShadow = true;
-    moonLight.shadow.mapSize.width = 2048; 
-    moonLight.shadow.mapSize.height = 2048;
-    moonLight.shadow.camera.near = 10; 
-    moonLight.shadow.camera.far = 150;
-    moonLight.shadow.camera.left = moonLight.shadow.camera.bottom = - GRASS_RANGE;
-    moonLight.shadow.camera.right = moonLight.shadow.camera.top = GRASS_RANGE;
-    moonLight.shadow.bias = -0.0005;
-    scene.add(moonLight);
+    // 2. DAY/NIGHT SYSTEM
+    const nightConfig = { fogColor: new THREE.Color(0x060912), hemiSky: new THREE.Color(0x162032), hemiGround: new THREE.Color(0x050810), hemiInt: 0.4, dirColor: new THREE.Color(0x7799bb), dirInt: 0.8, dirPos: new THREE.Vector3(30, 50, -30) };
+    const dayConfig = { fogColor: new THREE.Color(0x87ceeb), hemiSky: new THREE.Color(0xffffff), hemiGround: new THREE.Color(0x445544), hemiInt: 1.0, dirColor: new THREE.Color(0xfffaee), dirInt: 4.0, dirPos: new THREE.Vector3(50, 100, 50) };
 
-    // 3. LOAD THE HUMAN CHARACTER & OVERHEAD TORCH
+    let isNight = true; let targetConfig = nightConfig;
+    scene.fog = new THREE.FogExp2(nightConfig.fogColor, 0.02); scene.background = nightConfig.fogColor;
+
+    const hemiLight = new THREE.HemisphereLight(nightConfig.hemiSky, nightConfig.hemiGround, nightConfig.hemiInt); scene.add(hemiLight);
+    const mainLight = new THREE.DirectionalLight(nightConfig.dirColor, nightConfig.dirInt); 
+    mainLight.position.copy(nightConfig.dirPos); mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048; mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 10; mainLight.shadow.camera.far = 200;
+    mainLight.shadow.camera.left = mainLight.shadow.camera.bottom = - WORLD_SIZE/2;
+    mainLight.shadow.camera.right = mainLight.shadow.camera.top = WORLD_SIZE/2;
+    mainLight.shadow.bias = -0.0005; scene.add(mainLight);
+
+    btnTime.addEventListener('click', () => {
+        isNight = !isNight; targetConfig = isNight ? nightConfig : dayConfig;
+        btnTime.innerText = isNight ? "Day Mode" : "Night Mode";
+        if (!isNight && torchOn) { torchOn = false; torchLight.intensity = 0; torchGlow.intensity = 0; }
+    });
+
+    // 3. CHARACTER & TORCH
     let character, mixer, idleAction, walkAction;
-    let isWalking = false;
-    let torchOn = false;
+    let isWalking = false, torchOn = false;
     
-    // Main Flashlight Beam (SpotLight)
     const torchLight = new THREE.SpotLight(0xffeedd, 0, 80, Math.PI / 5, 0.6, 1.5); 
-    torchLight.castShadow = true;
-    torchLight.shadow.mapSize.width = 1024;
-    torchLight.shadow.mapSize.height = 1024;
-    torchLight.shadow.bias = -0.0005;
-    
-    // Secondary "Glow" Light (Illuminates the character's head/shoulders)
-    const torchGlow = new THREE.PointLight(0xffeedd, 0, 5);
-
-    const torchTarget = new THREE.Object3D();
+    torchLight.castShadow = true; torchLight.shadow.mapSize.width = 1024; torchLight.shadow.mapSize.height = 1024; torchLight.shadow.bias = -0.0005;
+    const torchGlow = new THREE.PointLight(0xffeedd, 0, 5); const torchTarget = new THREE.Object3D();
 
     const gltfLoader = new GLTFLoader(manager);
     gltfLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Soldier.glb', (gltf) => {
       character = gltf.scene;
       character.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }});
       
-      // ATTACH LIGHTS OVERHEAD
-      // Position the torch above the character's head (Height ~2.2)
-      torchLight.position.set(0, 2.2, 0.2); 
-      // Point the target slightly downward towards the ground ahead
-      torchTarget.position.set(0, 0.5, 10); 
-      torchLight.target = torchTarget;
+      torchLight.position.set(0, 2.5, 0.2); torchTarget.position.set(0, 0.5, 10); 
+      torchLight.target = torchTarget; torchGlow.position.set(0, 2.5, 0.2); 
       
-      // Position the glow exactly where the light source is to illuminate the top of the character
-      torchGlow.position.set(0, 2.2, 0.2); 
-      
-      character.add(torchLight);
-      character.add(torchTarget); 
-      character.add(torchGlow); 
-
+      character.add(torchLight); character.add(torchTarget); character.add(torchGlow); 
       scene.add(character);
-      character.position.set(0, 0, 0); 
-      controls.target.set(0, 1.2, 0);
+      controls.target.set(0, 1.2, 0); mainLight.target = character;
 
       mixer = new THREE.AnimationMixer(character);
-      idleAction = mixer.clipAction(gltf.animations[0]); 
-      walkAction = mixer.clipAction(gltf.animations[3]); // Calm walking animation
-      walkAction.setEffectiveWeight(1); idleAction.setEffectiveWeight(1);
-      idleAction.play();
+      idleAction = mixer.clipAction(gltf.animations[0]); walkAction = mixer.clipAction(gltf.animations[3]); 
+      walkAction.setEffectiveWeight(1); idleAction.setEffectiveWeight(1); idleAction.play();
     });
 
-    // 4. TERRAIN MATH (Fractal Noise)
     function hash(n) { return (Math.sin(n) * 43758.5453123) % 1; }
     function noise(x, z) {
         const pX = Math.floor(x), pZ = Math.floor(z);
@@ -259,166 +307,158 @@
     }
     
     function getTerrainData(x, z) {
-        let e = noise(x * 0.03, z * 0.03) * 2.0; 
-        e += noise(x * 0.2, z * 0.2) * 0.2; 
-        let s = noise(x * 0.1, z * 0.1); 
+        let e = noise(x * 0.03, z * 0.03) * 2.5; 
+        e += noise(x * 0.15, z * 0.15) * 0.5; 
+        let s = noise(x * 0.05, z * 0.05); 
         s = Math.max(0, Math.min(1, s + (e * 0.1))); 
-        let centerFlat = Math.min(Math.sqrt(x*x + z*z) / 5, 1.0);
+        let centerFlat = Math.min(Math.sqrt(x*x + z*z) / 8, 1.0);
         return { height: e * centerFlat, snowFactor: s * centerFlat }; 
     }
 
-    function generateBumpMap() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        const imgData = ctx.createImageData(512, 512);
-        for (let i = 0; i < imgData.data.length; i += 4) {
-            const val = Math.random() * 255; 
-            imgData.data[i] = val; imgData.data[i+1] = val; imgData.data[i+2] = val; imgData.data[i+3] = 255;
-        }
-        ctx.putImageData(imgData, 0, 0);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(50, 50);
-        return texture;
+    function toggleMap() {
+        mapOpen = !mapOpen;
+        if(mapOpen) { mapModal.style.visibility = 'visible'; mapModal.style.opacity = '1'; } 
+        else { mapModal.style.opacity = '0'; setTimeout(() => mapModal.style.visibility = 'hidden', 400); }
     }
+    btnMap.addEventListener('click', toggleMap);
+    closeMapBtn.addEventListener('click', toggleMap);
 
-    // 5. BUILD WORLD & GRASS
     let groundGeo, positions, instancedGrass;
     const planeSegments = 250; 
 
     function buildWorld() {
-        groundGeo = new THREE.PlaneGeometry(GRASS_RANGE * 2, GRASS_RANGE * 2, planeSegments, planeSegments);
+        groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, planeSegments, planeSegments);
         groundGeo.rotateX(-Math.PI / 2); 
         positions = groundGeo.attributes.position.array;
         const colors = [];
-        const cGreen = new THREE.Color(0x0e1709); // Extremely dark soil for night
-        const cSnow = new THREE.Color(0x8a9ba8); // Dimly lit snow
+        const cGreen = new THREE.Color(0x11210b); const cSnow = new THREE.Color(0xaabbcc); 
 
         for (let i = 0; i < positions.length; i += 3) {
             const vx = positions[i], vz = positions[i + 2];
             const data = getTerrainData(vx, vz);
-            positions[i + 1] = data.height;
+            positions[i + 1] = data.height; 
             let c = cGreen.clone().lerp(cSnow, data.snowFactor);
             colors.push(c.r, c.g, c.b);
         }
         groundGeo.computeVertexNormals();
         groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         
-        const bumpTexture = generateBumpMap();
-        const groundMat = new THREE.MeshStandardMaterial({ 
-          vertexColors: true, 
-          roughness: 0.9, 
-          bumpMap: bumpTexture, 
-          bumpScale: 0.04, // Slightly deeper bumps for torch shadows
-          flatShading: true
-        });
+        const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
         const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
+        groundMesh.receiveShadow = true; scene.add(groundMesh);
 
-        // --- KNEE-LEVEL GRASS ---
-        const bladeGeo = new THREE.ConeGeometry(0.02, 0.15, 3);
-        bladeGeo.translate(0, 0.075, 0); 
+        // --- EXTREMELY DENSE WAIST-HIGH GRASS ---
+        // Made slightly wider (0.08) to ensure maximum coverage with 1.5M instances
+        // Using fewer height segments (3 instead of 5) to save processing power while maintaining 1.5 million blades
+        const bladeGeo = new THREE.PlaneGeometry(0.08, GRASS_HEIGHT, 1, 3); 
+        bladeGeo.translate(0, GRASS_HEIGHT / 2, 0); 
 
-        const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide });
-
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, side: THREE.DoubleSide });
+        
         grassMat.onBeforeCompile = (shader) => {
-            shader.uniforms.time = { value: 0 };
+            shader.uniforms.time = { value: 0 }; shader.uniforms.playerPos = { value: new THREE.Vector3(0, -1000, 0) }; 
             shader.vertexShader = `
-                uniform float time;
-                attribute vec3 instanceColor;
-                attribute float instanceSnow;
-                varying vec3 vColor;
-                varying float vSnow;
-                varying float vY; 
+                uniform float time; uniform vec3 playerPos;
+                attribute vec3 instanceColor; attribute float instanceSnow; attribute float instanceCurve;
+                varying vec3 vColor; varying float vSnow; varying float vY; 
                 ${shader.vertexShader}
-            `.replace(
-                '#include <begin_vertex>',
-                `
+            `.replace('#include <begin_vertex>', `
                 #include <begin_vertex>
                 vec4 worldInstancePosition = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-                vColor = instanceColor;
-                vSnow = instanceSnow; 
-                vY = position.y; 
+                vColor = instanceColor; vSnow = instanceSnow; vY = position.y; 
+                
+                float h = position.y / ${GRASS_HEIGHT.toFixed(2)};
+                
+                // Taper to sharp point
+                transformed.x *= (1.0 - h * 0.9); 
+                
+                // Forward droop
+                transformed.z += pow(h, 2.0) * instanceCurve;
 
-                float windStrength = position.y * 0.6; 
-                float wind = sin(time * 2.0 + worldInstancePosition.x * 0.5 + worldInstancePosition.z * 0.5) * windStrength;
-                transformed.x += wind;
-                transformed.z += wind * 0.5;
-                `
-            );
+                // Dynamic Trampling around the waist
+                float distToPlayer = distance(worldInstancePosition.xz, playerPos.xz);
+                float trampleRadius = 0.8; 
+                float trample = 1.0 - smoothstep(0.0, trampleRadius, distToPlayer); 
+                if(trample > 0.0) {
+                    vec2 pushDir = normalize(worldInstancePosition.xz - playerPos.xz);
+                    transformed.x += pushDir.x * trample * h * 0.6; 
+                    transformed.z += pushDir.y * trample * h * 0.6; 
+                    transformed.y -= trample * h * 0.4; 
+                }
+
+                // Smooth Wind
+                float windStrength = h * 0.15; 
+                float wind = sin(time * 3.0 + worldInstancePosition.x * 0.5 + worldInstancePosition.z * 0.5) * windStrength; 
+                transformed.x += wind; transformed.z += wind * 0.5;
+            `);
             shader.fragmentShader = `
-                varying vec3 vColor;
-                varying float vSnow;
-                varying float vY;
+                varying vec3 vColor; varying float vSnow; varying float vY;
                 ${shader.fragmentShader}
-            `.replace(
-                '#include <color_fragment>',
-                `
+            `.replace('#include <color_fragment>', `
                 #include <color_fragment>
-                vec3 bottomColor = vColor * 0.3;
-                vec3 topColor = vColor * 1.2;
-                vec3 bladeColor = mix(bottomColor, topColor, clamp(vY / 0.15, 0.0, 1.0)); 
+                float h = clamp(vY / ${GRASS_HEIGHT.toFixed(2)}, 0.0, 1.0);
+                
+                vec3 bottomColor = vec3(0.01, 0.04, 0.0); 
+                vec3 topColor = vColor; 
+
+                vec3 bladeColor = mix(bottomColor, topColor, h); 
                 float snowMix = step(0.65, vSnow); 
-                diffuseColor.rgb = mix(bladeColor, vec3(0.6, 0.6, 0.7), snowMix); // Nighttime snow grass
-                `
-            );
+                diffuseColor.rgb = mix(bladeColor, vec3(0.85, 0.85, 0.9), snowMix); 
+            `);
             grassMat.userData.shader = shader;
         };
 
         instancedGrass = new THREE.InstancedMesh(bladeGeo, grassMat, GRASS_INSTANCES);
         instancedGrass.castShadow = true;
         
-        placeGrassInstances();
+        const dummy = new THREE.Object3D();
+        const instColors = new Float32Array(GRASS_INSTANCES * 3);
+        const snowData = new Float32Array(GRASS_INSTANCES);
+        const curveData = new Float32Array(GRASS_INSTANCES); 
+        
+        const cLushTips = new THREE.Color(0x66ff33); 
+        const cForestTips = new THREE.Color(0x44bb11); 
+        const cDryTips = new THREE.Color(0xaabb44); 
+        
+        for (let i = 0; i < GRASS_INSTANCES; i++) {
+            // Scattered permanently across the massive 160x160 arena
+            const x = (Math.random() - 0.5) * WORLD_SIZE; 
+            const z = (Math.random() - 0.5) * WORLD_SIZE;
+            const data = getTerrainData(x, z);
+            
+            dummy.position.set(x, data.height, z); 
+            dummy.rotation.y = Math.random() * Math.PI * 2; 
+            dummy.rotation.x = (Math.random() - 0.5) * 0.15; 
+            // Max scale ensures it stays perfectly at or below waist height
+            dummy.scale.set(1.0, 0.7 + Math.random() * 0.4, 1.0); 
+            dummy.updateMatrix(); instancedGrass.setMatrixAt(i, dummy.matrix);
+
+            let bladeColor;
+            let rand = Math.random();
+            if (rand < 0.10) { bladeColor = cDryTips; } 
+            else { bladeColor = cForestTips.clone().lerp(cLushTips, Math.random()); }
+
+            instColors[i*3] = bladeColor.r; instColors[i*3+1] = bladeColor.g; instColors[i*3+2] = bladeColor.b;
+            snowData[i] = data.snowFactor;
+            
+            curveData[i] = 0.05 + Math.random() * 0.15; 
+        }
+        instancedGrass.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instColors, 3));
+        instancedGrass.geometry.setAttribute('instanceSnow', new THREE.InstancedBufferAttribute(snowData, 1));
+        instancedGrass.geometry.setAttribute('instanceCurve', new THREE.InstancedBufferAttribute(curveData, 1));
         scene.add(instancedGrass);
     }
 
-    function placeGrassInstances() {
-        const dummy = new THREE.Object3D();
-        const colors = new Float32Array(GRASS_INSTANCES * 3);
-        const snowData = new Float32Array(GRASS_INSTANCES);
-        
-        const cDarkGreen = new THREE.Color(0x0e2b0b); 
-        const cLightGreen = new THREE.Color(0x1a450d); // Darker grass base colors for night
-        
-        for (let i = 0; i < GRASS_INSTANCES; i++) {
-            const x = (Math.random() - 0.5) * GRASS_RANGE;
-            const z = (Math.random() - 0.5) * GRASS_RANGE;
-            const data = getTerrainData(x, z);
-
-            dummy.position.set(x, data.height - 0.01, z); 
-            dummy.rotation.y = Math.random() * Math.PI; 
-            dummy.rotation.x = (Math.random() - 0.5) * 0.2; 
-            dummy.scale.set(1.0, 0.5 + Math.random() * 0.5, 1.0); 
-            dummy.updateMatrix();
-            instancedGrass.setMatrixAt(i, dummy.matrix);
-
-            let bladeColor = cDarkGreen.clone().lerp(cLightGreen, Math.random());
-            colors[i*3] = bladeColor.r; colors[i*3+1] = bladeColor.g; colors[i*3+2] = bladeColor.b;
-            snowData[i] = data.snowFactor;
-        }
-        instancedGrass.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(colors, 3));
-        instancedGrass.geometry.setAttribute('instanceSnow', new THREE.InstancedBufferAttribute(snowData, 1));
-    }
-
-    // 6. INPUT HANDLING
     const keys = { forward: false, backward: false, left: false, right: false };
-    
     window.addEventListener('keydown', (e) => {
         if(e.code === 'KeyW' || e.code === 'ArrowUp') keys.forward = true; 
         if(e.code === 'KeyS' || e.code === 'ArrowDown') keys.backward = true;
         if(e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = true; 
         if(e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = true;
-        
-        // TOGGLE TORCH LOGIC
-        if(e.code === 'KeyF') {
-            torchOn = !torchOn;
-            torchLight.intensity = torchOn ? 150.0 : 0.0; // High intensity for Physically Correct Lights
-            torchGlow.intensity = torchOn ? 25.0 : 0.0; 
-        }
+        if(e.code === 'KeyF') { torchOn = !torchOn; torchLight.intensity = torchOn ? 150.0 : 0.0; torchGlow.intensity = torchOn ? 20.0 : 0.0; }
+        if(e.code === 'KeyT') toggleTimeOfDay();
+        if(e.code === 'KeyM' && mapUnlocked) toggleMap();
     });
-
     window.addEventListener('keyup', (e) => {
         if(e.code === 'KeyW' || e.code === 'ArrowUp') keys.forward = false; 
         if(e.code === 'KeyS' || e.code === 'ArrowDown') keys.backward = false;
@@ -426,18 +466,27 @@
         if(e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = false;
     });
 
-    // 7. MAIN GAME LOOP
     const clock = new THREE.Clock();
     const speed = 1.6; 
 
     function animate() {
       requestAnimationFrame(animate);
+      
+      if(mapOpen) return; 
+
       const delta = Math.min(clock.getDelta(), 0.1);
       if (mixer) mixer.update(delta);
       const time = clock.getElapsedTime();
 
+      scene.fog.color.lerp(targetConfig.fogColor, 0.02); scene.background = scene.fog.color;
+      hemiLight.color.lerp(targetConfig.hemiSky, 0.02); hemiLight.groundColor.lerp(targetConfig.hemiGround, 0.02);
+      hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, targetConfig.hemiInt, 0.02);
+      mainLight.color.lerp(targetConfig.dirColor, 0.02); mainLight.intensity = THREE.MathUtils.lerp(mainLight.intensity, targetConfig.dirInt, 0.02);
+      mainLight.position.lerp(targetConfig.dirPos, 0.02);
+
       if (instancedGrass && instancedGrass.material.userData.shader) {
           instancedGrass.material.userData.shader.uniforms.time.value = time;
+          if (character) instancedGrass.material.userData.shader.uniforms.playerPos.value.copy(character.position);
       }
 
       if (character && positions) {
@@ -450,60 +499,45 @@
 
         const walkingNow = moveDir.lengthSq() > 0;
         
-        if (walkingNow && !isWalking) { 
-            walkAction.reset().play().crossFadeFrom(idleAction, 0.3, true); 
-            isWalking = true;
-        } else if (!walkingNow && isWalking) { 
-            idleAction.reset().play().crossFadeFrom(walkAction, 0.3, true); 
-            isWalking = false; 
-        }
+        if (walkingNow && !isWalking) { walkAction.reset().play().crossFadeFrom(idleAction, 0.3, true); isWalking = true; } 
+        else if (!walkingNow && isWalking) { idleAction.reset().play().crossFadeFrom(walkAction, 0.3, true); isWalking = false; }
 
         if (walkingNow) {
           moveDir.normalize();
           character.position.addScaledVector(moveDir, speed * delta);
+          
+          distanceWalked += speed * delta;
+          if (distanceWalked > 15 && !mapUnlocked) {
+              mapUnlocked = true;
+              btnMap.style.display = 'block';
+              toast.style.visibility = 'visible'; toast.style.opacity = '1';
+              setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.style.visibility = 'hidden', 500); }, 4000);
+          }
+          
+          // Confine player to inside the fixed 160m world bounds
+          const limit = WORLD_SIZE / 2 - 2;
+          if (character.position.x > limit) character.position.x = limit; if (character.position.x < -limit) character.position.x = -limit;
+          if (character.position.z > limit) character.position.z = limit; if (character.position.z < -limit) character.position.z = -limit;
+
           character.position.y = getTerrainData(character.position.x, character.position.z).height;
 
           const targetAngle = Math.atan2(moveDir.x, moveDir.z) + Math.PI;
           let diff = targetAngle - character.rotation.y;
           while (diff < -Math.PI) diff += Math.PI * 2; while (diff > Math.PI) diff -= Math.PI * 2;
           character.rotation.y += diff * 10 * delta;
-        }
 
-        const targetLookAt = new THREE.Vector3(character.position.x, character.position.y + 1.2, character.position.z);
-        controls.target.lerp(targetLookAt, 0.1); controls.update();
-
-        const px = character.position.x;
-        const pz = character.position.z;
-        instancedGrass.position.set(
-            Math.floor(px / GRASS_RANGE + 0.5) * GRASS_RANGE,
-            0,
-            Math.floor(pz / GRASS_RANGE + 0.5) * GRASS_RANGE
-        );
-
-        if (walkingNow) {
-          const segSize = (GRASS_RANGE * 2) / planeSegments;
-          const halfSize = (GRASS_RANGE * 2) / 2;
-          
-          const lpx = character.position.x - instancedGrass.position.x; 
-          const lpz = character.position.z - instancedGrass.position.z;
-
-          const gridX = Math.round((lpx + halfSize) / segSize);
-          const gridZ = Math.round((lpz + halfSize) / segSize);
-          
-          const deformRadius = 0.4; 
-          const maxDepth = -0.15; 
-          const searchR = Math.ceil(deformRadius / segSize) + 1;
+          const segSize = WORLD_SIZE / planeSegments; const halfSize = WORLD_SIZE / 2;
+          const px = character.position.x; const pz = character.position.z;
+          const gridX = Math.round((px + halfSize) / segSize); const gridZ = Math.round((pz + halfSize) / segSize);
+          const deformRadius = 0.4; const maxDepth = -0.15; const searchR = Math.ceil(deformRadius / segSize) + 1;
           let needsUpdate = false;
 
           for (let z = gridZ - searchR; z <= gridZ + searchR; z++) {
               for (let x = gridX - searchR; x <= gridX + searchR; x++) {
                   if (x < 0 || x > planeSegments || z < 0 || z > planeSegments) continue;
                   const vIdx = z * (planeSegments + 1) + x, i = vIdx * 3;
-                  const vx = positions[i] + instancedGrass.position.x; 
-                  const vy = positions[i+1], vz = positions[i+2] + instancedGrass.position.z; 
-                  const dx = vx - character.position.x, dz = vz - character.position.z;
-                  const dist = Math.sqrt(dx*dx + dz*dz);
-                  
+                  const vx = positions[i]; const vy = positions[i+1], vz = positions[i+2]; 
+                  const dist = Math.sqrt((vx - px)*(vx - px) + (vz - pz)*(vz - pz));
                   if (dist < deformRadius) {
                       const data = getTerrainData(vx, vz);
                       const targetY = data.height + (maxDepth * Math.cos((dist / deformRadius) * (Math.PI / 2))) * data.snowFactor;
@@ -513,9 +547,134 @@
           }
           if (needsUpdate) { groundGeo.attributes.position.needsUpdate = true; groundGeo.computeVertexNormals(); }
         }
+
+        const targetLookAt = new THREE.Vector3(character.position.x, character.position.y + 1.2, character.position.z);
+        controls.target.lerp(targetLookAt, 0.1); controls.update();
       }
       renderer.render(scene, camera);
     }
+
+    // Vue JS initialization
+    new Vue({
+        el: '#map-app',
+        data: () => ({
+            distance: null, airports: [], currentAirport: null, currentMarker: null,
+            projection: null, airplaneTween: null, airplaneFade: null,
+            markers: [
+                { airport: null, x: 200, y: 300, startX: 0, startY: 0, fill: '#f47825', current: false },
+                { airport: null, x: 500, y: 100, startX: 0, startY: 0, fill: '#00b26b', current: false }
+            ]
+        }),
+        filters: { numberWithCommas(val) { return (val && val.toString ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : val); } },
+        mounted() {
+            this.projection = d3.geoAlbersUsa().scale([1500]);
+            fetch('https://s3-us-west-2.amazonaws.com/s.cdpn.io/39255/us-states.json')
+                .then(res => res.json())
+                .then(states => {
+                    const path = d3.geoPath().projection(this.projection);
+                    d3.select(this.$refs.states).selectAll("path").data(states.features).enter().append("path").attr("d", path);
+                });
+            fetch('https://s3-us-west-2.amazonaws.com/s.cdpn.io/39255/airports.json')
+                .then(res => res.json())
+                .then(airports => {
+                    airports = airports.slice(0, 100);
+                    let i = airports.length;
+                    while (i--) {
+                        const d = airports[i]; const proj = this.projection([d.Lng, d.Lat]);
+                        if (proj) { d.x = proj[0]; d.y = proj[1]; d.current = false; } else { airports.splice(i, 1); }
+                    }
+                    this.airports = airports.reverse();
+                    this.markers.forEach(marker => { const ra = this.randomAirport(); marker.airport = ra; marker.x = ra.x; marker.y = ra.y; });
+                    this.markerDistance();
+                });
+        },
+        methods: {
+            randomAirport() { return this.airports[Math.floor(Math.random() * this.airports.length)]; },
+            markerSet(e, marker) {
+                if (e) e.preventDefault();
+                marker = marker || this.markers[0]; marker.airport = null; marker.current = true;
+                marker.startX = marker.x; marker.startY = marker.y;
+                this.currentAirport = null; this.currentMarker = marker;
+
+                if (this.airplaneTween) {
+                    const oldTween = this.airplaneTween; const tl = new TimelineLite();
+                    tl.to(this.$refs.airplane, 0.2, { opacity: 0, onComplete: () => { if (oldTween) oldTween.kill(); } });
+                    this.airplaneFade = tl;
+                }
+                document.addEventListener('mousemove', this.markerDrag); document.addEventListener('mouseup', this.markerStop);
+                this.$refs.map.addEventListener('mouseleave', this.markerLeave);
+            },
+            markerDrag(e) {
+                if (!this.currentMarker) return;
+                if (this.currentAirport) {
+                    this.currentMarker.x = this.currentAirport.x; this.currentMarker.y = this.currentAirport.y;
+                } else {
+                    const rect = this.$refs.map.getBoundingClientRect(); const svg = this.$refs.map;
+                    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+                    const cursorpt = pt.matrixTransform(svg.getScreenCTM().inverse());
+                    this.currentMarker.x = cursorpt.x; this.currentMarker.y = cursorpt.y;
+                }
+                this.currentMarker.airport = this.currentAirport; this.markerDistance();
+            },
+            markerLeave() {
+                if (this.currentMarker) { this.currentMarker.x = this.currentMarker.startX; this.currentMarker.y = this.currentMarker.startY; }
+                this.markerStop();
+            },
+            markerStop() {
+                document.removeEventListener('mousemove', this.markerDrag); document.removeEventListener('mouseup', this.markerStop);
+                this.$refs.map.removeEventListener('mouseleave', this.markerLeave);
+                if (this.currentMarker) { this.currentMarker.current = false; this.currentMarker = null; }
+                this.markerDistance();
+            },
+            markerConnect() {
+                let m1 = this.markers[0], m2 = this.markers[1];
+                if (m1.x < m2.x) { m1 = this.markers[1]; m2 = this.markers[0]; }
+                const dx = m2.x - m1.x, dy = m2.y - m1.y;
+                const dr = Math.sqrt(dx * dx + dy * dy);
+                return `M${m2.x},${m2.y}A${dr},${dr} 0 0,1 ${m1.x},${m1.y}`;
+            },
+            calcDistance(lat1, lon1, lat2, lon2) {
+                const p = Math.PI / 180;
+                const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2 + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
+                return 12742 * Math.asin(Math.sqrt(a)) * 0.621371; 
+            },
+            markerDistance() {
+                const p1 = this.projection.invert([this.markers[0].x, this.markers[0].y]);
+                const p2 = this.projection.invert([this.markers[1].x, this.markers[1].y]);
+                if (!p1 || !p2) return;
+                this.distance = Math.round(this.calcDistance(p1[1], p1[0], p2[1], p2[0]));
+                this.airplaneAnimate();
+            },
+            airportSnap(e, airport) {
+                if (airport !== this.currentAirport) {
+                    airport.current = true; this.currentAirport = airport;
+                    if (this.currentMarker) this.currentMarker.airport = airport;
+                }
+            },
+            airportClick(e, airport) {
+                if (!this.currentMarker) this.markerSet(e);
+                this.currentAirport = airport; this.currentMarker.x = airport.x; this.currentMarker.y = airport.y; this.currentMarker.airport = airport;
+            },
+            airportLeave(e, airport) { airport.current = false; this.currentAirport = null; },
+            airplaneAnimate() {
+                const pathData = this.markerConnect();
+                const newTween = new TimelineMax({ repeat: -1, delay: -0.2 });
+                const duration = Math.min(this.distance / 80, 15);
+                const opacityDuration = Math.min(duration * 0.2, 0.3);
+
+                if (this.airplaneFade && this.airplaneFade.isActive()) {
+                    newTween.pause();
+                    this.airplaneFade.eventCallback('onComplete', () => newTween.play());
+                } else if (this.airplaneTween) { this.airplaneTween.kill(); }
+
+                const bez = MorphSVGPlugin.pathDataToBezier(pathData);
+                newTween.to(this.$refs.airplane, duration, { bezier: { values: bez, curviness: 1, autoRotate: -90, type: "cubic" }, reversed: true, ease: Linear.easeNone }, 0);
+                newTween.fromTo(this.$refs.airplane, opacityDuration, { opacity: 0 }, { opacity: 1, delay: opacityDuration / 2, ease: Linear.easeNone }, 0);
+                newTween.to(this.$refs.airplane, opacityDuration, { opacity: 0, ease: Linear.easeNone }, `-=${opacityDuration}`);
+                this.airplaneTween = newTween;
+            }
+        }
+    });
 
     window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
   </script>
