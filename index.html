@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ultra-Dense Waist-High Grass & Interactive Map</title>
   
-  <link href="https://fonts.googleapis.com/css?family=Oswald:200,300" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Oswald:200,300,500" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.14/vue.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenMax.min.js"></script>
   <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/16327/MorphSVGPlugin.min.js"></script>
 
@@ -67,32 +66,24 @@
       z-index: 50; opacity: 0; visibility: hidden; transition: opacity 0.4s ease;
     }
     .map-content {
-      background: var(--light); border: 1px solid rgba(255, 255, 255, 0.2);
+      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.2);
       padding: 30px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
       display: flex; flex-direction: column; align-items: center; width: 80vw; max-width: 1000px;
       font-family: 'Oswald', sans-serif; color: var(--text);
     }
     #map-app { width: 100%; display: flex; flex-direction: column; align-items: center; }
     
-    .mileage__calculations { margin: 0; font-size: 3rem; font-weight: 300; }
-    .mileage__calculations small { font-size: 0.6em; color: var(--dark); margin-left: 5px; }
-    .mileage-map { display: block; width: 100%; height: auto; max-height: 60vh; margin: 0 auto 1rem; overflow: visible; }
-    .mileage-map__states { stroke: var(--light); stroke-width: 2; fill: var(--medium); }
-    .marker { fill: var(--dark); stroke: var(--text); stroke-width: 5; cursor: pointer; transition: opacity 0.3s linear; user-select: none; }
-    .marker > * { transition: transform 0.3s cubic-bezier(.6, .0, .5, 1); }
-    .marker text { stroke: none; fill: var(--text); font-family: inherit; font-size: 28px; font-weight: 200; }
-    .marker--current { opacity: 0.8; pointer-events: none; }
-    .marker--current > * { transform: scale(0.8); }
-    .airport { fill: #FFF; stroke-width: 2; stroke: transparent; transition: stroke 0.3s linear; }
-    .airport:hover { stroke: rgba(255, 255, 255, 0.3); }
-    .airport--current { stroke: rgba(255, 255, 255, 0.8); }
-    .airport__range { fill: transparent; cursor: pointer; }
-    .marker-connector { fill: none; stroke: #FFF; stroke-width: 3; stroke-dasharray: 6 6; pointer-events: none; animation: marching-ants 1s linear 0s infinite; }
-    @keyframes marching-ants { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 12; } }
-    .airplane { pointer-events: none; fill: #FFF; opacity: 0; }
-    .mileage__instructions { opacity: 0.7; font-size: 0.9rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px;}
-    .marker-fade-enter-active, .marker-fade-leave-active { transition: opacity .3s linear; }
-    .marker-fade-enter, .marker-fade-leave-to { opacity: 0; }
+    .custom-map { display: block; width: 100%; height: auto; max-height: 60vh; margin: 0 auto 1rem; overflow: visible; }
+    
+    .region-shape { stroke: rgba(255,255,255,0.1); stroke-width: 2; transition: all 0.3s; }
+    .region-shape:hover { stroke: rgba(255,255,255,0.5); filter: brightness(1.2); }
+    
+    .region-label { font-size: 32px; font-weight: 500; fill: #fff; pointer-events: none; text-anchor: middle; letter-spacing: 2px;}
+    .region-node { fill: #fff; stroke: var(--dark); stroke-width: 4; }
+    
+    .marker-connector { fill: none; stroke: var(--dark); stroke-width: 4; stroke-dasharray: 8 8; pointer-events: none; animation: marching-ants 1s linear 0s infinite; }
+    @keyframes marching-ants { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 16; } }
+    .airplane { pointer-events: none; fill: #FFF; filter: drop-shadow(0px 5px 10px rgba(0,0,0,0.5)); }
 
     #close-map {
       margin-top: 10px; padding: 10px 40px; font-size: 14px; font-weight: bold; letter-spacing: 2px;
@@ -134,37 +125,20 @@
 
   <div id="map-modal">
     <div class="map-content">
-      <div id="map-app" class="mileage">
-        <svg class="mileage-map" ref="map" width="1200" height="780" viewBox="-120 -180 1200 780">
-            <g class="mileage-map__states" ref="states"></g>
-            <g ref="airports">
-                <g class="airport" :class="{ 'airport--current' : airport.current }" v-for="airport in airports">
-                    <circle r="3" :cx="airport.x" :cy="airport.y" class="airport__marker" />
-                    <circle r="16" :cx="airport.x" :cy="airport.y" class="airport__range"
-                            @mousemove="airportSnap($event, airport)"
-                            @mouseup="airportClick($event, airport)"
-                            @mouseleave.self="airportLeave($event, airport)" />
-                </g>
-            </g>
-            <path class="marker-connector" :d="markerConnect()"></path>
+      <div id="map-app">
+        <svg class="custom-map" ref="map" width="1200" height="780" viewBox="0 0 1200 780">
+            <path class="region-shape" fill="#3b82f6" d="M50,150 Q150,50 350,100 T400,300 T200,450 T50,350 Z" /> <path class="region-shape" fill="#8b5cf6" d="M450,50 Q650,20 800,150 T850,350 T600,300 T450,150 Z" /> <path class="region-shape" fill="#10b981" d="M750,400 Q950,300 1100,450 T1150,650 T900,750 T750,550 Z" /> <path class="region-shape" fill="#f59e0b" d="M150,550 Q300,450 500,550 T650,700 T400,750 T150,650 Z" /> <path class="marker-connector" :d="flightPath"></path>
+
             <g class="airplane" ref="airplane">
-                <path class="airplane__icon" d="M21 15.984l-8.016-2.484v5.484l2.016 1.5v1.5l-3.516-0.984-3.469 0.984v-1.5l1.969-1.5v-5.484l-7.969 2.484v-1.969l7.969-5.016v-5.484c0-0.844 0.656-1.5 1.5-1.5s1.5 0.656 1.5 1.5v5.484l8.016 5.016v1.969z" transform="translate(-8,-15) scale(1.2)"></path>
+                <path d="M21 15.984l-8.016-2.484v5.484l2.016 1.5v1.5l-3.516-0.984-3.469 0.984v-1.5l1.969-1.5v-5.484l-7.969 2.484v-1.969l7.969-5.016v-5.484c0-0.844 0.656-1.5 1.5-1.5s1.5 0.656 1.5 1.5v5.484l8.016 5.016v1.969z" transform="translate(-16,-15) scale(1.6)"></path>
             </g>
-            <g v-for="marker in markers" 
-               @mousedown="markerSet($event, marker)" 
-               class="marker" 
-               :class="{ 'marker--current' : marker.current }" 
-               :transform="'translate('+marker.x+','+marker.y+')'">
-                <path :fill="marker.fill" d="M0 0l28.592-28.592c15.78-15.78 15.908-41.24.128-57.02a40.424 40.424 0 0 0-57.124 57.2z"></path>
-                <transition name="marker-fade">
-                    <text v-if="marker.airport" x="0" y="-42" text-anchor="middle">{{ marker.airport.LocationID }}</text>
-                </transition>
+
+            <g v-for="(region, index) in regions" :key="region.name">
+                <circle class="region-node" :cx="region.x" :cy="region.y" r="10"></circle>
+                <circle :fill="region.color" :cx="region.x" :cy="region.y" r="5"></circle>
+                <text class="region-label" :x="region.x" :y="region.y - 25">{{ index + 1 }}. {{ region.name }}</text>
             </g>
         </svg>
-        <h1 class="mileage__calculations" v-show="distance">
-            <span>{{ distance | numberWithCommas }}</span><small>mi</small>
-        </h1>
-        <div class="mileage__instructions">Drag the markers around to calculate distance</div>
       </div>
       <button id="close-map">CLOSE MAP</button>
     </div>
@@ -191,9 +165,9 @@
     import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
 
     // --- CONFIGURATION ---
-    const GRASS_INSTANCES = 1500000; // INSANE DENSITY
-    const WORLD_SIZE = 160; // Tighter world bounds to pack the 1.5M blades closely
-    const GRASS_HEIGHT = 0.75; // STRICTLY WAIST-HIGH. Will never be above the 1.8 unit tall character's head.
+    const GRASS_INSTANCES = 1500000; 
+    const WORLD_SIZE = 160; 
+    const GRASS_HEIGHT = 0.75; 
 
     // --- GAME STATE ---
     let distanceWalked = 0;
@@ -347,9 +321,6 @@
         const groundMesh = new THREE.Mesh(groundGeo, groundMat);
         groundMesh.receiveShadow = true; scene.add(groundMesh);
 
-        // --- EXTREMELY DENSE WAIST-HIGH GRASS ---
-        // Made slightly wider (0.08) to ensure maximum coverage with 1.5M instances
-        // Using fewer height segments (3 instead of 5) to save processing power while maintaining 1.5 million blades
         const bladeGeo = new THREE.PlaneGeometry(0.08, GRASS_HEIGHT, 1, 3); 
         bladeGeo.translate(0, GRASS_HEIGHT / 2, 0); 
 
@@ -368,14 +339,9 @@
                 vColor = instanceColor; vSnow = instanceSnow; vY = position.y; 
                 
                 float h = position.y / ${GRASS_HEIGHT.toFixed(2)};
-                
-                // Taper to sharp point
                 transformed.x *= (1.0 - h * 0.9); 
-                
-                // Forward droop
                 transformed.z += pow(h, 2.0) * instanceCurve;
 
-                // Dynamic Trampling around the waist
                 float distToPlayer = distance(worldInstancePosition.xz, playerPos.xz);
                 float trampleRadius = 0.8; 
                 float trample = 1.0 - smoothstep(0.0, trampleRadius, distToPlayer); 
@@ -386,7 +352,6 @@
                     transformed.y -= trample * h * 0.4; 
                 }
 
-                // Smooth Wind
                 float windStrength = h * 0.15; 
                 float wind = sin(time * 3.0 + worldInstancePosition.x * 0.5 + worldInstancePosition.z * 0.5) * windStrength; 
                 transformed.x += wind; transformed.z += wind * 0.5;
@@ -421,7 +386,6 @@
         const cDryTips = new THREE.Color(0xaabb44); 
         
         for (let i = 0; i < GRASS_INSTANCES; i++) {
-            // Scattered permanently across the massive 160x160 arena
             const x = (Math.random() - 0.5) * WORLD_SIZE; 
             const z = (Math.random() - 0.5) * WORLD_SIZE;
             const data = getTerrainData(x, z);
@@ -429,7 +393,6 @@
             dummy.position.set(x, data.height, z); 
             dummy.rotation.y = Math.random() * Math.PI * 2; 
             dummy.rotation.x = (Math.random() - 0.5) * 0.15; 
-            // Max scale ensures it stays perfectly at or below waist height
             dummy.scale.set(1.0, 0.7 + Math.random() * 0.4, 1.0); 
             dummy.updateMatrix(); instancedGrass.setMatrixAt(i, dummy.matrix);
 
@@ -456,7 +419,6 @@
         if(e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = true; 
         if(e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = true;
         if(e.code === 'KeyF') { torchOn = !torchOn; torchLight.intensity = torchOn ? 150.0 : 0.0; torchGlow.intensity = torchOn ? 20.0 : 0.0; }
-        if(e.code === 'KeyT') toggleTimeOfDay();
         if(e.code === 'KeyM' && mapUnlocked) toggleMap();
     });
     window.addEventListener('keyup', (e) => {
@@ -514,7 +476,6 @@
               setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.style.visibility = 'hidden', 500); }, 4000);
           }
           
-          // Confine player to inside the fixed 160m world bounds
           const limit = WORLD_SIZE / 2 - 2;
           if (character.position.x > limit) character.position.x = limit; if (character.position.x < -limit) character.position.x = -limit;
           if (character.position.z > limit) character.position.z = limit; if (character.position.z < -limit) character.position.z = -limit;
@@ -554,123 +515,50 @@
       renderer.render(scene, camera);
     }
 
-    // Vue JS initialization
+    // Vue JS initialization for the Custom Map
     new Vue({
         el: '#map-app',
         data: () => ({
-            distance: null, airports: [], currentAirport: null, currentMarker: null,
-            projection: null, airplaneTween: null, airplaneFade: null,
-            markers: [
-                { airport: null, x: 200, y: 300, startX: 0, startY: 0, fill: '#f47825', current: false },
-                { airport: null, x: 500, y: 100, startX: 0, startY: 0, fill: '#00b26b', current: false }
-            ]
+            regions: [
+                { name: 'Exeletia', x: 230, y: 240, color: '#3b82f6' },
+                { name: 'Numex',    x: 630, y: 170, color: '#8b5cf6' },
+                { name: 'Plotesia', x: 940, y: 550, color: '#10b981' },
+                { name: 'Pandesia', x: 420, y: 600, color: '#f59e0b' }
+            ],
+            flightPath: '',
+            airplaneTween: null
         }),
-        filters: { numberWithCommas(val) { return (val && val.toString ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : val); } },
         mounted() {
-            this.projection = d3.geoAlbersUsa().scale([1500]);
-            fetch('https://s3-us-west-2.amazonaws.com/s.cdpn.io/39255/us-states.json')
-                .then(res => res.json())
-                .then(states => {
-                    const path = d3.geoPath().projection(this.projection);
-                    d3.select(this.$refs.states).selectAll("path").data(states.features).enter().append("path").attr("d", path);
-                });
-            fetch('https://s3-us-west-2.amazonaws.com/s.cdpn.io/39255/airports.json')
-                .then(res => res.json())
-                .then(airports => {
-                    airports = airports.slice(0, 100);
-                    let i = airports.length;
-                    while (i--) {
-                        const d = airports[i]; const proj = this.projection([d.Lng, d.Lat]);
-                        if (proj) { d.x = proj[0]; d.y = proj[1]; d.current = false; } else { airports.splice(i, 1); }
-                    }
-                    this.airports = airports.reverse();
-                    this.markers.forEach(marker => { const ra = this.randomAirport(); marker.airport = ra; marker.x = ra.x; marker.y = ra.y; });
-                    this.markerDistance();
-                });
+            this.generateFlightPath();
+            this.$nextTick(() => {
+                this.airplaneAnimate();
+            });
         },
         methods: {
-            randomAirport() { return this.airports[Math.floor(Math.random() * this.airports.length)]; },
-            markerSet(e, marker) {
-                if (e) e.preventDefault();
-                marker = marker || this.markers[0]; marker.airport = null; marker.current = true;
-                marker.startX = marker.x; marker.startY = marker.y;
-                this.currentAirport = null; this.currentMarker = marker;
-
-                if (this.airplaneTween) {
-                    const oldTween = this.airplaneTween; const tl = new TimelineLite();
-                    tl.to(this.$refs.airplane, 0.2, { opacity: 0, onComplete: () => { if (oldTween) oldTween.kill(); } });
-                    this.airplaneFade = tl;
-                }
-                document.addEventListener('mousemove', this.markerDrag); document.addEventListener('mouseup', this.markerStop);
-                this.$refs.map.addEventListener('mouseleave', this.markerLeave);
+            generateFlightPath() {
+                // Creates a smooth curve connecting 1 -> 2 -> 3 -> 4
+                const p1 = this.regions[0];
+                const p2 = this.regions[1];
+                const p3 = this.regions[2];
+                const p4 = this.regions[3];
+                
+                // M: Move to P1. Q: Curve to P2. T: Smooth curve to P3. T: Smooth curve to P4.
+                this.flightPath = `M ${p1.x} ${p1.y} Q 400 50 ${p2.x} ${p2.y} T ${p3.x} ${p3.y} T ${p4.x} ${p4.y}`;
             },
-            markerDrag(e) {
-                if (!this.currentMarker) return;
-                if (this.currentAirport) {
-                    this.currentMarker.x = this.currentAirport.x; this.currentMarker.y = this.currentAirport.y;
-                } else {
-                    const rect = this.$refs.map.getBoundingClientRect(); const svg = this.$refs.map;
-                    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-                    const cursorpt = pt.matrixTransform(svg.getScreenCTM().inverse());
-                    this.currentMarker.x = cursorpt.x; this.currentMarker.y = cursorpt.y;
-                }
-                this.currentMarker.airport = this.currentAirport; this.markerDistance();
-            },
-            markerLeave() {
-                if (this.currentMarker) { this.currentMarker.x = this.currentMarker.startX; this.currentMarker.y = this.currentMarker.startY; }
-                this.markerStop();
-            },
-            markerStop() {
-                document.removeEventListener('mousemove', this.markerDrag); document.removeEventListener('mouseup', this.markerStop);
-                this.$refs.map.removeEventListener('mouseleave', this.markerLeave);
-                if (this.currentMarker) { this.currentMarker.current = false; this.currentMarker = null; }
-                this.markerDistance();
-            },
-            markerConnect() {
-                let m1 = this.markers[0], m2 = this.markers[1];
-                if (m1.x < m2.x) { m1 = this.markers[1]; m2 = this.markers[0]; }
-                const dx = m2.x - m1.x, dy = m2.y - m1.y;
-                const dr = Math.sqrt(dx * dx + dy * dy);
-                return `M${m2.x},${m2.y}A${dr},${dr} 0 0,1 ${m1.x},${m1.y}`;
-            },
-            calcDistance(lat1, lon1, lat2, lon2) {
-                const p = Math.PI / 180;
-                const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2 + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
-                return 12742 * Math.asin(Math.sqrt(a)) * 0.621371; 
-            },
-            markerDistance() {
-                const p1 = this.projection.invert([this.markers[0].x, this.markers[0].y]);
-                const p2 = this.projection.invert([this.markers[1].x, this.markers[1].y]);
-                if (!p1 || !p2) return;
-                this.distance = Math.round(this.calcDistance(p1[1], p1[0], p2[1], p2[0]));
-                this.airplaneAnimate();
-            },
-            airportSnap(e, airport) {
-                if (airport !== this.currentAirport) {
-                    airport.current = true; this.currentAirport = airport;
-                    if (this.currentMarker) this.currentMarker.airport = airport;
-                }
-            },
-            airportClick(e, airport) {
-                if (!this.currentMarker) this.markerSet(e);
-                this.currentAirport = airport; this.currentMarker.x = airport.x; this.currentMarker.y = airport.y; this.currentMarker.airport = airport;
-            },
-            airportLeave(e, airport) { airport.current = false; this.currentAirport = null; },
             airplaneAnimate() {
-                const pathData = this.markerConnect();
-                const newTween = new TimelineMax({ repeat: -1, delay: -0.2 });
-                const duration = Math.min(this.distance / 80, 15);
-                const opacityDuration = Math.min(duration * 0.2, 0.3);
-
-                if (this.airplaneFade && this.airplaneFade.isActive()) {
-                    newTween.pause();
-                    this.airplaneFade.eventCallback('onComplete', () => newTween.play());
-                } else if (this.airplaneTween) { this.airplaneTween.kill(); }
-
-                const bez = MorphSVGPlugin.pathDataToBezier(pathData);
-                newTween.to(this.$refs.airplane, duration, { bezier: { values: bez, curviness: 1, autoRotate: -90, type: "cubic" }, reversed: true, ease: Linear.easeNone }, 0);
-                newTween.fromTo(this.$refs.airplane, opacityDuration, { opacity: 0 }, { opacity: 1, delay: opacityDuration / 2, ease: Linear.easeNone }, 0);
-                newTween.to(this.$refs.airplane, opacityDuration, { opacity: 0, ease: Linear.easeNone }, `-=${opacityDuration}`);
+                const newTween = new TimelineMax({ repeat: -1 });
+                const bez = MorphSVGPlugin.pathDataToBezier(this.flightPath);
+                
+                // Fly the path, keeping the airplane oriented to the path direction
+                newTween.to(this.$refs.airplane, 8, { 
+                    bezier: { values: bez, curviness: 1, autoRotate: 90, type: "cubic" }, 
+                    ease: Power1.easeInOut 
+                }, 0);
+                
+                // Fade out/in at the start/end loops
+                newTween.fromTo(this.$refs.airplane, 0.5, { opacity: 0 }, { opacity: 1, ease: Linear.easeNone }, 0);
+                newTween.to(this.$refs.airplane, 0.5, { opacity: 0, ease: Linear.easeNone }, "-=0.5");
+                
                 this.airplaneTween = newTween;
             }
         }
