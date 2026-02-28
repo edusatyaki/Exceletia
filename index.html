@@ -7,9 +7,6 @@
   
   <link href="https://fonts.googleapis.com/css?family=Oswald:200,300,500" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.14/vue.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenMax.min.js"></script>
-  <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/16327/MorphSVGPlugin.min.js"></script>
-
   <style>
     body { 
       margin: 0; 
@@ -127,9 +124,17 @@
     <div class="map-content">
       <div id="map-app">
         <svg class="custom-map" ref="map" width="1200" height="780" viewBox="0 0 1200 780">
-            <path class="region-shape" fill="#3b82f6" d="M50,150 Q150,50 350,100 T400,300 T200,450 T50,350 Z" /> <path class="region-shape" fill="#8b5cf6" d="M450,50 Q650,20 800,150 T850,350 T600,300 T450,150 Z" /> <path class="region-shape" fill="#10b981" d="M750,400 Q950,300 1100,450 T1150,650 T900,750 T750,550 Z" /> <path class="region-shape" fill="#f59e0b" d="M150,550 Q300,450 500,550 T650,700 T400,750 T150,650 Z" /> <path class="marker-connector" :d="flightPath"></path>
+            <path class="region-shape" fill="#3b82f6" d="M50,150 Q150,50 350,100 T400,300 T200,450 T50,350 Z" /> 
+            <path class="region-shape" fill="#8b5cf6" d="M450,50 Q650,20 800,150 T850,350 T600,300 T450,150 Z" /> 
+            <path class="region-shape" fill="#10b981" d="M750,400 Q950,300 1100,450 T1150,650 T900,750 T750,550 Z" /> 
+            <path class="region-shape" fill="#f59e0b" d="M150,550 Q300,450 500,550 T650,700 T400,750 T150,650 Z" /> 
+            
+            <path id="flight-path" class="marker-connector" :d="flightPath"></path>
 
-            <g class="airplane" ref="airplane">
+            <g class="airplane">
+                <animateMotion dur="8s" repeatCount="indefinite" rotate="auto">
+                    <mpath href="#flight-path" />
+                </animateMotion>
                 <path d="M21 15.984l-8.016-2.484v5.484l2.016 1.5v1.5l-3.516-0.984-3.469 0.984v-1.5l1.969-1.5v-5.484l-7.969 2.484v-1.969l7.969-5.016v-5.484c0-0.844 0.656-1.5 1.5-1.5s1.5 0.656 1.5 1.5v5.484l8.016 5.016v1.969z" transform="translate(-16,-15) scale(1.6)"></path>
             </g>
 
@@ -160,9 +165,10 @@
   </div>
 
   <script type="module">
-    import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
-    import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
+    // --- UPDATED IMPORTS (Using esm.sh which automatically resolves all Three.js dependencies natively) ---
+    import * as THREE from 'https://esm.sh/three@0.136.0';
+    import { GLTFLoader } from 'https://esm.sh/three@0.136.0/examples/jsm/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'https://esm.sh/three@0.136.0/examples/jsm/controls/OrbitControls.js';
 
     // --- CONFIGURATION ---
     const GRASS_INSTANCES = 1500000; 
@@ -254,7 +260,9 @@
     const torchGlow = new THREE.PointLight(0xffeedd, 0, 5); const torchTarget = new THREE.Object3D();
 
     const gltfLoader = new GLTFLoader(manager);
-    gltfLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Soldier.glb', (gltf) => {
+    
+    // --- UPDATED MODEL URL (Using jsdelivr for guaranteed MIME type and reliability) ---
+    gltfLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r136/examples/models/gltf/Soldier.glb', (gltf) => {
       character = gltf.scene;
       character.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }});
       
@@ -525,14 +533,10 @@
                 { name: 'Plotesia', x: 940, y: 550, color: '#10b981' },
                 { name: 'Pandesia', x: 420, y: 600, color: '#f59e0b' }
             ],
-            flightPath: '',
-            airplaneTween: null
+            flightPath: ''
         }),
         mounted() {
             this.generateFlightPath();
-            this.$nextTick(() => {
-                this.airplaneAnimate();
-            });
         },
         methods: {
             generateFlightPath() {
@@ -544,22 +548,6 @@
                 
                 // M: Move to P1. Q: Curve to P2. T: Smooth curve to P3. T: Smooth curve to P4.
                 this.flightPath = `M ${p1.x} ${p1.y} Q 400 50 ${p2.x} ${p2.y} T ${p3.x} ${p3.y} T ${p4.x} ${p4.y}`;
-            },
-            airplaneAnimate() {
-                const newTween = new TimelineMax({ repeat: -1 });
-                const bez = MorphSVGPlugin.pathDataToBezier(this.flightPath);
-                
-                // Fly the path, keeping the airplane oriented to the path direction
-                newTween.to(this.$refs.airplane, 8, { 
-                    bezier: { values: bez, curviness: 1, autoRotate: 90, type: "cubic" }, 
-                    ease: Power1.easeInOut 
-                }, 0);
-                
-                // Fade out/in at the start/end loops
-                newTween.fromTo(this.$refs.airplane, 0.5, { opacity: 0 }, { opacity: 1, ease: Linear.easeNone }, 0);
-                newTween.to(this.$refs.airplane, 0.5, { opacity: 0, ease: Linear.easeNone }, "-=0.5");
-                
-                this.airplaneTween = newTween;
             }
         }
     });
