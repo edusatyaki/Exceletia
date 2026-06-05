@@ -1422,6 +1422,150 @@ window.addEventListener('resize',()=>{
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TREASURES  (additive feature — 10 collectible gems)
+//  Self-contained: waits for the world, builds the gems, runs its own
+//  spin/bob/collect loop and HUD. Does not touch any existing code path.
+// ═══════════════════════════════════════════════════════════════════════════
+(function treasureFeature(){
+  const TOTAL = 10;
+  const PICKUP_DIST = 1.7;          // how close the explorer must get
+  const treasures = [];             // { group, x, z, collected, t0 }
+  let collected = 0;
+  let audioCtx = null;
+
+  // Hand-placed positions (avoid the spawn point, castle interior & river)
+  const SPOTS = [
+    [  8,  -6], [ -9, -10], [ 14, -16], [-15, -20], [ 20,  -8],
+    [-22, -14], [ 10, -26], [-12, -28], [ 26, -30], [-28, -24],
+  ];
+
+  // ── Floating HUD counter (created here, not in existing HTML) ──
+  const hud = document.createElement('div');
+  hud.id = 'treasure-hud';
+  hud.style.cssText = `
+    position:absolute; top:18px; left:50%; transform:translateX(-50%);
+    background:rgba(8,18,5,0.6); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    border:1px solid rgba(210,165,55,0.4); border-radius:40px; padding:8px 22px;
+    color:#f0d98a; font-family:'Segoe UI',sans-serif; font-size:13px; font-weight:bold;
+    letter-spacing:2px; z-index:12; box-shadow:0 6px 24px rgba(0,0,0,0.6);
+    pointer-events:none; opacity:0; transition:opacity .6s;`;
+  hud.innerHTML = `✦ TREASURES &nbsp;<span id="t-count">0</span> / ${TOTAL}`;
+  document.body.appendChild(hud);
+
+  const banner = document.createElement('div');
+  banner.style.cssText = `
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.8);
+    background:rgba(8,18,5,0.7); backdrop-filter:blur(16px); border:1px solid rgba(210,165,55,0.5);
+    border-radius:16px; padding:26px 46px; color:#f3e0a0; font-family:'Oswald',sans-serif;
+    font-size:24px; font-weight:500; letter-spacing:4px; text-transform:uppercase; text-align:center;
+    z-index:40; box-shadow:0 12px 50px rgba(0,0,0,0.8); pointer-events:none;
+    opacity:0; transition:opacity .5s, transform .5s;`;
+  banner.innerHTML = `🏆 All Treasures Collected!`;
+  document.body.appendChild(banner);
+
+  // ── A small chime on pickup (Web Audio; gesture already given via "Enter") ──
+  function chime(step){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      const base = 660 * Math.pow(2, step/12);     // rising pitch per pickup
+      [0,4,7].forEach((semi,i)=>{                    // little major chord
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        const t = audioCtx.currentTime + i*0.05;
+        o.type='triangle'; o.frequency.value = base*Math.pow(2,semi/12);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(0.16,t+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t); o.stop(t+0.5);
+      });
+    }catch(e){/* audio optional */}
+  }
+
+  // ── Build one glowing treasure gem ──
+  function makeTreasure(x, z){
+    const grp = new THREE.Group();
+    grp.position.set(x, 0, z);
+
+    // Faceted gold gem
+    const gem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.34, 0),
+      new THREE.MeshStandardMaterial({
+        color:0xffcc33, emissive:0xc88400, emissiveIntensity:0.9,
+        metalness:0.6, roughness:0.25, flatShading:true,
+      })
+    );
+    gem.position.y = 0.85; gem.castShadow = true;
+    grp.add(gem);
+
+    // Stone pedestal so it reads as placed treasure
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.34, 0.18, 8),
+      new THREE.MeshStandardMaterial({color:0x4a4438, roughness:0.95})
+    );
+    base.position.y = 0.09; base.castShadow = true; base.receiveShadow = true;
+    grp.add(base);
+
+    // Warm glow light
+    const glow = new THREE.PointLight(0xffb84d, 2.4, 7, 2);
+    glow.position.y = 0.9; grp.add(glow);
+
+    scene.add(grp);
+    treasures.push({ grp, gem, glow, x, z, collected:false, t0:0 });
+  }
+
+  function buildTreasures(){ SPOTS.forEach(([x,z])=>makeTreasure(x,z)); hud.style.opacity='1'; }
+
+  // ── Own animation + pickup loop (independent of the main animate()) ──
+  function loop(now){
+    requestAnimationFrame(loop);
+    const t = now * 0.001;
+    for(const tr of treasures){
+      if(tr.collected){
+        // Collection flourish: rise, spin fast, shrink, then remove
+        const k = Math.min(1, (t - tr.t0) / 0.6);
+        tr.grp.position.y = k * 1.6;
+        tr.gem.rotation.y += 0.4;
+        const s = 1 - k;
+        tr.grp.scale.setScalar(s <= 0 ? 0.0001 : s);
+        if(tr.glow) tr.glow.intensity = 2.4 * (1 - k);
+        if(k >= 1 && tr.grp.parent){ scene.remove(tr.grp); tr.grp._done = true; }
+        continue;
+      }
+      // Idle bob + slow spin
+      tr.gem.rotation.y += 0.02;
+      tr.gem.position.y = 0.85 + Math.sin(t*2 + tr.x) * 0.12;
+
+      // Pickup test against the explorer
+      if(typeof character !== 'undefined' && character){
+        const dx = character.position.x - tr.x;
+        const dz = character.position.z - tr.z;
+        if(dx*dx + dz*dz < PICKUP_DIST*PICKUP_DIST){
+          tr.collected = true; tr.t0 = t;
+          collected++;
+          document.getElementById('t-count').textContent = collected;
+          chime(collected);
+          if(collected >= TOTAL){
+            banner.style.opacity = '1';
+            banner.style.transform = 'translate(-50%,-50%) scale(1)';
+            setTimeout(()=>{ banner.style.opacity='0'; }, 4000);
+          }
+        }
+      }
+    }
+  }
+
+  // Wait until the world + character exist, then build & start.
+  const ready = setInterval(()=>{
+    if(typeof scene !== 'undefined' && typeof character !== 'undefined' && character){
+      clearInterval(ready);
+      buildTreasures();
+      requestAnimationFrame(loop);
+    }
+  }, 200);
+
+})();
 </script>
 </body>
 </html>
